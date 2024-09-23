@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.layout import Layout
 from rich.live import Live
 from rich.text import Text
+import threading
 
 console = Console()
 
@@ -15,9 +16,12 @@ def load_settings(settings_file='settings.json'):
     try:
         with open(settings_file, 'r') as f:
             settings = json.load(f)
-        required_keys = ['ufw_log', 'auth_log', 'fail2ban_log', 'update_interval']
+        required_keys = ['ufw_log', 'auth_log', 'fail2ban_log', 'update_interval', 'verbose']
         if not all(key in settings for key in required_keys):
             raise ValueError("Missing required keys in settings.json")
+        verbose_keys = ['blocked_ips', 'targeted_ports', 'failed_usernames', 'failed_ips', 'successful_usernames', 'successful_ips', 'banned_ips']
+        if not all(key in settings['verbose'] for key in verbose_keys):
+            raise ValueError("Missing required verbose keys in settings.json")
         return settings
     except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
         console.print(f"Error loading settings: {e}", style="bold red")
@@ -93,52 +97,52 @@ def parse_fail2ban_log(filename):
         console.print(f"Fail2ban log file not found: {filename}", style="bold red")
     return fail2ban_data
 
-def format_ufw_log(ufw_data):
+def format_ufw_log(ufw_data, verbose_settings):
     text = Text()
     text.append("Total Blocked Connections: ", style="white")
     text.append(f"{sum(ufw_data['blocked_ips'].values())}\n", style="green")
-    text.append("Top 5 Blocked IPs:\n", style="white")
-    for ip, count in ufw_data['blocked_ips'].most_common(5):
+    text.append(f"Top {verbose_settings['blocked_ips']} Blocked IPs:\n", style="white")
+    for ip, count in ufw_data['blocked_ips'].most_common(verbose_settings['blocked_ips']):
         text.append(f"{ip:<39}", style="green")
         text.append(f"({count} blocks)\n", style="white")
-    text.append("Most Targeted Ports:\n", style="white")
-    for port, count in ufw_data['targeted_ports'].most_common(5):
+    text.append(f"Top {verbose_settings['targeted_ports']} Most Targeted Ports:\n", style="white")
+    for port, count in ufw_data['targeted_ports'].most_common(verbose_settings['targeted_ports']):
         text.append(f"{port:<6}", style="green")
         text.append(f" - {count} attempts\n", style="white")
     return text
 
-def format_auth_log(auth_data):
+def format_auth_log(auth_data, verbose_settings):
     text = Text()
     text.append("Failed Login Attempts: ", style="white")
     text.append(f"{auth_data['failed_logins']}\n", style="red")
     text.append("Successful Logins: ", style="white")
     text.append(f"{auth_data['successful_logins']}\n", style="green")
-    text.append("Top 5 Usernames for Failed Logins:\n", style="white")
-    for username, count in auth_data['failed_usernames'].most_common(5):
+    text.append(f"Top {verbose_settings['failed_usernames']} Usernames for Failed Logins:\n", style="white")
+    for username, count in auth_data['failed_usernames'].most_common(verbose_settings['failed_usernames']):
         text.append(f"{username:<15}", style="red")
         text.append(f"({count} attempts)\n", style="white")
-    text.append("Top 5 IPs for Failed Logins:\n", style="white")
-    for ip, count in auth_data['failed_ips'].most_common(5):
+    text.append(f"Top {verbose_settings['failed_ips']} IPs for Failed Logins:\n", style="white")
+    for ip, count in auth_data['failed_ips'].most_common(verbose_settings['failed_ips']):
         text.append(f"{ip:<39}", style="red")
         text.append(f"({count} attempts)\n", style="white")
-    text.append("Top 5 Usernames for Successful Logins:\n", style="white")
-    for username, count in auth_data['successful_usernames'].most_common(5):
+    text.append(f"Top {verbose_settings['successful_usernames']} Usernames for Successful Logins:\n", style="white")
+    for username, count in auth_data['successful_usernames'].most_common(verbose_settings['successful_usernames']):
         text.append(f"{username:<15}", style="green")
         text.append(f"({count} logins)\n", style="white")
-    text.append("Top 5 IPs for Successful Logins:\n", style="white")
-    for ip, count in auth_data['successful_ips'].most_common(5):
+    text.append(f"Top {verbose_settings['successful_ips']} IPs for Successful Logins:\n", style="white")
+    for ip, count in auth_data['successful_ips'].most_common(verbose_settings['successful_ips']):
         text.append(f"{ip:<39}", style="green")
         text.append(f"({count} logins)\n", style="white")
     return text
 
-def format_fail2ban_log(fail2ban_data):
+def format_fail2ban_log(fail2ban_data, verbose_settings):
     text = Text()
     text.append("Total Bans: ", style="white")
     text.append(f"{fail2ban_data['total_bans']}\n", style="red")
     text.append("Currently Banned IPs: ", style="white")
     text.append(f"{len(fail2ban_data['banned_ips'])}\n", style="red")
-    text.append("Top 5 Banned IPs:\n", style="white")
-    for ip, count in fail2ban_data['banned_ips'].most_common(5):
+    text.append(f"Top {verbose_settings['banned_ips']} Banned IPs:\n", style="white")
+    for ip, count in fail2ban_data['banned_ips'].most_common(verbose_settings['banned_ips']):
         text.append(f"{ip:<39}", style="red")
         text.append(f"({count} bans)\n", style="white")
     return text
@@ -153,25 +157,66 @@ def create_layout():
     )
     return layout
 
-def display_log_summary(ufw_data, auth_data, fail2ban_data):
+def display_log_summary(ufw_data, auth_data, fail2ban_data, verbose_settings):
     layout = create_layout()
     header = Text(f"🔒 Log Analysis Summary - Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     header.stylize("cyan")
     layout["header"].update(header)
-    layout["ufw"].update(Panel(format_ufw_log(ufw_data), title="🛡️ UFW Log", border_style="blue"))
-    layout["auth"].update(Panel(format_auth_log(auth_data), title="🔑 Auth Log", border_style="yellow"))
-    layout["fail2ban"].update(Panel(format_fail2ban_log(fail2ban_data), title="⛔ Fail2ban Log", border_style="red"))
+    layout["ufw"].update(Panel(format_ufw_log(ufw_data, verbose_settings), title="🛡️ UFW Log", border_style="blue"))
+    layout["auth"].update(Panel(format_auth_log(auth_data, verbose_settings), title="🔑 Auth Log", border_style="yellow"))
+    layout["fail2ban"].update(Panel(format_fail2ban_log(fail2ban_data, verbose_settings), title="⛔ Fail2ban Log", border_style="red"))
     return layout
+
+def check_for_quit(stop_event):
+    while not stop_event.is_set():
+        user_input = input()
+        if user_input.lower() == 'q':
+            console.print("\nQuitting the program...", style="bold yellow")
+            stop_event.set()
+
+def display_welcome_message():
+    welcome_text = Text()
+    welcome_text.append("Welcome to the Log Analyzer!\n\n", style="bold green")
+    welcome_text.append("This program will continuously analyze and display summaries of your log files.\n", style="cyan")
+    welcome_text.append("The display will update every few seconds based on your settings.\n\n", style="cyan")
+    welcome_text.append("Instructions:\n", style="bold yellow")
+    welcome_text.append("- The program will start analyzing logs automatically.\n", style="yellow")
+    welcome_text.append("- To quit at any time, simply type ", style="yellow")
+    welcome_text.append("q", style="bold red")
+    welcome_text.append(" and press ", style="yellow")
+    welcome_text.append("Enter", style="bold red")
+    welcome_text.append(".\n\n", style="yellow")
+    welcome_text.append("Press Enter to start...", style="bold green")
+    
+    console.print(Panel(welcome_text, title="Log Analyzer", border_style="blue"))
+    input()
 
 def main():
     settings = load_settings()
-    with Live(refresh_per_second=1/settings['update_interval'], screen=True) as live:
-        while True:
-            ufw_data = parse_ufw_log(settings['ufw_log'])
-            auth_data = parse_auth_log(settings['auth_log'])
-            fail2ban_data = parse_fail2ban_log(settings['fail2ban_log'])
-            live.update(display_log_summary(ufw_data, auth_data, fail2ban_data))
-            time.sleep(settings['update_interval'])
+    verbose_settings = settings['verbose']
+    
+    display_welcome_message()
+    
+    stop_event = threading.Event()
+    
+    # Start a thread to check for the 'q' input
+    quit_thread = threading.Thread(target=check_for_quit, args=(stop_event,))
+    quit_thread.daemon = True
+    quit_thread.start()
+    
+    try:
+        with Live(refresh_per_second=1/settings['update_interval'], screen=True) as live:
+            while not stop_event.is_set():
+                ufw_data = parse_ufw_log(settings['ufw_log'])
+                auth_data = parse_auth_log(settings['auth_log'])
+                fail2ban_data = parse_fail2ban_log(settings['fail2ban_log'])
+                live.update(display_log_summary(ufw_data, auth_data, fail2ban_data, verbose_settings))
+                time.sleep(settings['update_interval'])
+    except KeyboardInterrupt:
+        console.print("\nProgram interrupted. Exiting...", style="bold yellow")
+    finally:
+        stop_event.set()
+        console.print("Analysis stopped. Thank you for using Log Analyzer!", style="bold green")
 
 if __name__ == "__main__":
     main()
