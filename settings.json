@@ -3,5 +3,14 @@
     "auth_log": "/var/log/auth.log",
     "fail2ban_log": "/var/log/fail2ban.log",
     "report_log": "/var/log/report.log",
-    "update_interval": 5
+    "update_interval": 5,
+    "verbose": {
+        "blocked_ips": 20,
+        "targeted_ports": 20,
+        "failed_usernames": 20,
+        "failed_ips": 20,
+        "successful_usernames": 5,
+        "successful_ips": 5,
+        "banned_ips": 20
+    }
 }
