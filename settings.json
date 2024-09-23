@@ -1,0 +1,7 @@
+{
+    "ufw_log": "ufw_log_EXAMPLE",
+    "auth_log": "auth_log_EXAMPLE",
+    "fail2ban_log": "fail2ban_log_EXAMPLE",
+    "report_log": "report.log",
+    "update_interval": 5
+}
