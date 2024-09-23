@@ -1,4 +1,4 @@
-# LogParser
+### LogParser
 
 ## Overview
 This Log Analysis Tool is a Python-based utility designed to provide real-time monitoring and analysis of system logs. It focuses on three key areas of system security:
@@ -55,6 +55,62 @@ python log_analysis_tool.py
 ```
 
 The dashboard will start and update automatically based on the configured interval (default is 5 seconds).
+
+## Example Output
+When you run the Log Analysis Tool, you'll see a live-updating dashboard similar to this:
+
+```
+🔒 Log Analysis Summary - Last Updated: 2024-09-23 15:30:45
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 🛡️ UFW Log                                                                  │
+│                                                                            │
+│ Total Blocked Connections: 1337                                            │
+│ Top 5 Blocked IPs:                                                         │
+│ 192.168.1.100                           (500 blocks)                       │
+│ 10.0.0.50                               (300 blocks)                       │
+│ 172.16.0.1                              (200 blocks)                       │
+│ 192.168.0.10                            (150 blocks)                       │
+│ 10.10.10.10                             (100 blocks)                       │
+│ Most Targeted Ports:                                                       │
+│ 22     - 800 attempts                                                      │
+│ 80     - 300 attempts                                                      │
+│ 443    - 150 attempts                                                      │
+│ 3306   - 50 attempts                                                       │
+│ 21     - 37 attempts                                                       │
+└────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 🔑 Auth Log                                                                 │
+│                                                                            │
+│ Failed Login Attempts: 250                                                 │
+│ Successful Logins: 50                                                      │
+│ Top 5 Usernames for Failed Logins:                                         │
+│ admin           (100 attempts)                                             │
+│ root            (75 attempts)                                              │
+│ user            (40 attempts)                                              │
+│ test            (20 attempts)                                              │
+│ guest           (15 attempts)                                              │
+│ Top 5 IPs for Failed Logins:                                               │
+│ 192.168.1.100                           (80 attempts)                      │
+│ 10.0.0.50                               (60 attempts)                      │
+│ 172.16.0.1                              (50 attempts)                      │
+│ 192.168.0.10                            (40 attempts)                      │
+│ 10.10.10.10                             (20 attempts)                      │
+└────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│ ⛔ Fail2ban Log                                                             │
+│                                                                            │
+│ Total Bans: 75                                                             │
+│ Currently Banned IPs: 25                                                   │
+│ Top 5 Banned IPs:                                                          │
+│ 192.168.1.100                           (20 bans)                          │
+│ 10.0.0.50                               (15 bans)                          │
+│ 172.16.0.1                              (12 bans)                          │
+│ 192.168.0.10                            (8 bans)                           │
+│ 10.10.10.10                             (5 bans)                           │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+This dashboard provides a quick overview of your system's security status, including blocked connections, login attempts, and banned IPs. The information updates in real-time based on your configured interval.
 
 ## Customization
 If you need to adjust the log file paths or update interval, you can modify the `settings.json` file. The `update_interval` is in seconds.
