@@ -1,6 +1,7 @@
 import time
 import json
 import re
+import subprocess
 from collections import Counter
 from datetime import datetime
 from rich.console import Console
@@ -83,6 +84,29 @@ def parse_auth_log(filename):
         console.print(f"Auth log file not found: {filename}", style="bold red")
     return auth_data
 
+def get_fail2ban_status():
+    current_bans = {'total_bans': 0, 'banned_ips': Counter(), 'jails': []}
+    try:
+        # Get list of jails
+        jail_list = subprocess.run(['sudo', 'fail2ban-client', 'status'], capture_output=True, text=True)
+        jails = jail_list.stdout.strip().split('\n')[-1].split('\t')[-1].split(', ')
+        current_bans['jails'] = jails
+
+        for jail in jails:
+            jail_status = subprocess.run(['sudo', 'fail2ban-client', 'status', jail], capture_output=True, text=True)
+            status_lines = jail_status.stdout.strip().split('\n')
+            for line in status_lines:
+                if 'Currently banned:' in line:
+                    banned_count = int(line.split('\t')[-1])
+                    current_bans['total_bans'] += banned_count
+                elif 'Banned IP list:' in line:
+                    banned_ips = line.split('\t')[-1].split()
+                    for ip in banned_ips:
+                        current_bans['banned_ips'][ip] += 1
+    except subprocess.CalledProcessError as e:
+        console.print(f"Error running fail2ban-client: {e}", style="bold red")
+    return current_bans
+
 def parse_fail2ban_log(filename):
     fail2ban_data = {'total_bans': 0, 'banned_ips': Counter()}
     try:
@@ -95,6 +119,13 @@ def parse_fail2ban_log(filename):
                         fail2ban_data['banned_ips'][ip_match.group(1)] += 1
     except FileNotFoundError:
         console.print(f"Fail2ban log file not found: {filename}", style="bold red")
+    
+    # Double-check with fail2ban-client
+    current_bans = get_fail2ban_status()
+    fail2ban_data['current_bans'] = current_bans['total_bans']
+    fail2ban_data['currently_banned_ips'] = current_bans['banned_ips']
+    fail2ban_data['active_jails'] = current_bans['jails']
+    
     return fail2ban_data
 
 def format_ufw_log(ufw_data, verbose_settings):
@@ -137,14 +168,19 @@ def format_auth_log(auth_data, verbose_settings):
 
 def format_fail2ban_log(fail2ban_data, verbose_settings):
     text = Text()
-    text.append("Total Bans: ", style="white")
+    text.append("Total Bans (historical): ", style="white")
     text.append(f"{fail2ban_data['total_bans']}\n", style="red")
     text.append("Currently Banned IPs: ", style="white")
-    text.append(f"{len(fail2ban_data['banned_ips'])}\n", style="red")
-    text.append(f"Top {verbose_settings['banned_ips']} Banned IPs:\n", style="white")
+    text.append(f"{fail2ban_data['current_bans']}\n", style="red")
+    text.append(f"Top {verbose_settings['banned_ips']} Banned IPs (historical):\n", style="white")
     for ip, count in fail2ban_data['banned_ips'].most_common(verbose_settings['banned_ips']):
         text.append(f"{ip:<39}", style="red")
-        text.append(f"({count} bans)\n", style="white")
+        text.append(f"({count} bans)", style="white")
+        if ip in fail2ban_data['currently_banned_ips']:
+            text.append(" [CURRENTLY BANNED]", style="bold red")
+        text.append("\n")
+    text.append("Active Jails: ", style="white")
+    text.append(f"{', '.join(fail2ban_data['active_jails'])}\n", style="yellow")
     return text
 
 def create_layout():
