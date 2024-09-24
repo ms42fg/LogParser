@@ -177,10 +177,14 @@ def format_fail2ban_log(fail2ban_data, verbose_settings):
     text.append("Currently Banned IPs by Jail:\n", style="white")
     for jail in fail2ban_data['active_jails']:
         text.append(f"Jail: {jail}\n", style="yellow")
-        for ip, count in fail2ban_data['banned_ips'].items():
-            if count > 0:
-                text.append(f"  {ip:<39}", style="red")
-                text.append(f"(in {count} jail{'s' if count > 1 else ''})\n", style="white")
+        jail_status = subprocess.run(['sudo', 'fail2ban-client', 'status', jail], capture_output=True, text=True)
+        status_lines = jail_status.stdout.strip().split('\n')
+        for line in status_lines:
+            if 'Banned IP list:' in line:
+                banned_ips = line.split('\t')[-1].split()
+                for ip in banned_ips:
+                    text.append(f"  {ip:<39}", style="red")
+                    text.append(f"(in {jail})\n", style="white")
     
     # Display top banned IPs (historical)
     text.append(f"Top {verbose_settings['banned_ips']} Banned IPs (historical):\n", style="white")
